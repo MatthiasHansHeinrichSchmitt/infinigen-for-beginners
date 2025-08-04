@@ -290,8 +290,9 @@ camera.camera_pose_proposal.pitch = ("clip_gaussian", 90, 15, 60, 110)
 
 ## 🧭 Simulator Integration
 - Sanity-check in CloudCompare if the scenes are properly exported 
-
-![[Cloud_Compare_scene_example.png]]
+<figure style="text-align:center;">
+  <img src="Cloud_Compare_scene_example.png" alt="Alt text" style="width:60%; height:auto;"/>
+</figure>
 - Tested with **Stonefish** and **Bluerov2 Gym (Meshcat)**, only very small/low-asset scenes (<1GB file size)
 - Exported `.obj` or `.dae` files are loaded, but complex scenes (high asset density) may break visualization
 
