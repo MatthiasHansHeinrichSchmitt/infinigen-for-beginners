@@ -20,24 +20,40 @@ This project documents the process and learnings from generating high-quality un
 ### Prerequisites
 
 - Python 3.11  
-- Blender ≥ 3.6 (displaying your created scenes is no problem, BUT make sure to use the same version as infinigen when modifying files)
 - CUDA GPU or Metal (on macOS)  
 - FFmpeg for video rendering  
 - Disk space: >20GB recommended (a scene can become >15GB after export to `.obj` --> choose scene parameters wisely)
 
 ### Setup
 
-Clone the repository and install dependencies:
-
+First, clone the repo and set up a conda environment (you may need to [install conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html))
 ```bash
 git clone https://github.com/princeton-vl/infinigen.git
 cd infinigen
-pip install -r requirements.txt
-python scripts/download_assets.py
+conda create --name infinigen python=3.11
+conda activate infinigen
 ```
 
-### Cluster (SLURM) & Docker
+Then, install the infinigen package using one of the options below:
 
+_Option 1: (Python model)_
+```bash
+# Full install (Terrain & OpenGL-GT enabled, needed for Infinigen-Nature HelloWorld)
+pip install -e ".[terrain,vis]"
+```
+
+OR
+
+_Option 2: (Blender Python script)_
+```bash
+# Enable OpenGL GT (WITH interactive Blender)
+INFINIGEN_INSTALL_CUSTOMGT=True bash scripts/install/interactive_blender.sh
+```
+
+For more details follow the installation guide: https://github.com/princeton-vl/infinigen/blob/main/docs/Installation.md
+Note that we worked in the following with _Option 1_.
+### Cluster (SLURM) & Docker
+- Installation (https://github.com/princeton-vl/infinigen/blob/main/docs/Installation.md#using-infinigen-in-a-docker-container)
 - Docker is used for GPU access inside the cluster.  
 - CUDA setup inside container is required for GPU rendering.
 
@@ -75,11 +91,77 @@ Note, if you have a local GPU, set `LocalScheduleHandler.use_gpu=True`.
 
 ## ⚙️ Key Gin Parameters
 
+If you have never worked with Gin file configuration before, you should know that it is really powerful. It simply allows you to modify any parameters in all scripts that you are calling. How does it work?
+
+You import gin and you mark the functions or classes that you want to modify later with an `@gin.configurable`:
+
+```bash
+import gin
+
+@gin.configurable
+def compose_nature(output_folder, scene_seed, **params):
+
+	p = pipeline.RandomStageExecutor(scene_seed, output_folder, params)
+	
+	...
+```
+
+
+In order to understand the modification mechanism better, you should know that the `compose_nature` file is a stacking of all possible generations in form of the `RandomStageExecutor`. In a stage you define first the code that is executed and can modify parameters. Important to note is that the name of the stage is the first argument (string). Here we provide you an example for the kelp asset:
+
+```python
+def add_kelp(terrain_mesh):
+    fac = monocot.KelpMonocotFactory(int_hash((scene_seed, 0)), coarse=True)
+
+    selection = density.placement_mask(scale=0.05, tag=underwater_domain)
+
+    placement.scatter_placeholders_mesh(
+        terrain_mesh,
+        fac,
+        altitude=-0.05,
+        overall_density=params.get("kelp_density", uniform(0.2, 1)),
+        selection=selection,
+        distance_min=3,
+    )
+
+p.run_stage("kelp", add_kelp, terrain_mesh)
+```
+
+Now, we want to take you one layer deeper inside the `RandomStageExecutor`. The executor only executes the stage if the scene fulfils given prerequisites and in case of a given likeliness 
+`f"{name}_chance"` (last condition/paragraph):
+
+
+```python
+def _should_run_stage(self, name, use_chance, prereq):
+    if prereq is not None:
+        try:
+            e = next(e for e in self.results if e["name"] == prereq)
+        except StopIteration:
+            raise ValueError(f"{self} could not find matching name for {prereq=}")
+        if not e["ran"]:
+            logger.info(f"Skipping run_stage({name}...) due to unmet {prereq=}")
+            return
+
+    with FixedSeed(int_hash((self.scene_seed, name, 0))):
+        if not self.params.get(f"{name}_enabled", True):
+            logger.debug(f"Not running {name} due to manually set not enabled")
+            return False
+
+        if use_chance and np.random.uniform() > self.params[f"{name}_chance"]:
+            logger.debug(f"Not running {name} due to random chance")
+            return False
+
+    return True
+
+```
+
+This is the most crucial part for modifying the appearance of a scenes. We modify the probability of objects, animals and other scene attributes to appear. We can also put constraints to the water, e.g. if we want to simulate waves or not, or the camera(s) by limiting their trajectory.
+
 ```gin
 compose_nature.kelp_chance = 1.0
 compose_nature.creatures_chance = 0.0
 compose_nature.fish_school_chance = 0.3
-water.shader.volume_density = ("uniform", 0.09, 0.13)
+water.geo.with_waves=False
 camera.camera_pose_proposal.pitch = ("clip_gaussian", 90, 15, 60, 140)
 ```
 
@@ -88,6 +170,8 @@ See `configs/scene_types/under_water.gin` and `kelp_forest.gin` for full setups.
 ---
 
 ## 🧱 Troubleshooting & Insights
+
+When playing around with all the possible parameters and configurations, you will run into different issues. To give you a hand full of fixes for the beginning, we provide you with a short list of things that came us across.
 
 | Problem | Cause | Fix |
 |--------|-------|-----|
@@ -101,6 +185,7 @@ See `configs/scene_types/under_water.gin` and `kelp_forest.gin` for full setups.
 ---
 
 ## 📦 Exporting to External Simulators
+
 
 Export `.blend` to `.obj`:
 
@@ -120,8 +205,7 @@ python -m infinigen.tools.export \
 ## 🧭 Simulator Integration
 
 - Tested with **Stonefish** and **Bluerov2 Gym (Meshcat)**
-- Exported `.obj` or `.dae` files are loaded, but complex scenes may break visualization
-- Downscale scene bounds or convert to `.glb` for animation support
+- Exported `.obj` or `.dae` files are loaded, but complex scenes (high asset density) may break visualization
 
 ---
 
@@ -135,8 +219,8 @@ python -m infinigen.tools.export \
 
 ## 🎥 Rendering & Videos
 
-
-Use FFmpeg to convert frames:
+If you do not modify the standard pipeline of `manage_jobs.py`, you will first create a coarse version then a fine version of the scene and finally the code will execute a rendering of all frames of the initialised camera. Are you interested in making a clip out of the frames?
+Use FFmpeg to convert frames in a short clip:
 
 ```bash
 ffmpeg -framerate 30 -i %04d.png -c:v libx264 -pix_fmt yuv420p output.mp4
