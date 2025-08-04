@@ -10,7 +10,7 @@ This project documents the process and learnings from generating high-quality un
 ## 📁 Project Overview
 
 - **Goal**: Automatically generate photorealistic underwater scenes (kelp forests, coral reefs, canyons) for simulation and ML applications.
-- **Tooling**: Infinigen + Blender + SLURM Cluster + Docker + MeshCat Simulator + CloudCompare
+- **Tooling**: Infinigen + Blender + (SLURM Cluster + Docker) + MeshCat Simulator + CloudCompare
 - **Focus**: Parameter tuning with `.gin` config files, scene export to `.obj`, and simulator integration.
 
 ---
@@ -20,10 +20,10 @@ This project documents the process and learnings from generating high-quality un
 ### Prerequisites
 
 - Python 3.11  
-- Blender ≥ 3.6  
+- Blender ≥ 3.6 (displaying your created scenes is no problem, BUT make sure to use the same version as infinigen when modifying files)
 - CUDA GPU or Metal (on macOS)  
 - FFmpeg for video rendering  
-- Disk space: >20GB recommended  
+- Disk space: >20GB recommended (a scene can become >15GB after export to `.obj` --> choose scene parameters wisely)
 
 ### Setup
 
@@ -57,6 +57,8 @@ compose_nature  # Layout objects (empty placeholders)
 populate_scene  # Replace placeholders with assets
 ```
 
+that are both defined within `infinigen\infinigen_examples\generate_nature.py`.
+
 ### Example command:
 
 ```bash
@@ -65,8 +67,9 @@ python -m infinigen.datagen.manage_jobs \
   --num_scenes 1 \
   --configs kelp_forest.gin \
   --pipeline_configs local_16GB.gin monocular_video.gin \
-  --pipeline_overrides LocalScheduleHandler.use_gpu=True
+  --pipeline_overrides LocalScheduleHandler.use_gpu=False
 ```
+Note, if you have a local GPU, set `LocalScheduleHandler.use_gpu=True`.
 
 ---
 
@@ -109,8 +112,8 @@ python -m infinigen.tools.export \
 ```
 
 **Tips**:
-- Remove atmospheric objects from `.blend` before export.  
-- Exporting low-asset scenes reduces file size significantly.
+- Remove atmospheric objects from `.blend` before export. (blocks the detailed structure of the scene to be perceived in a similator)
+- Exporting low-asset scenes reduces file size significantly. (assets carry a lot of data, e.g. texture and complex structure)
 
 ---
 
@@ -131,6 +134,7 @@ python -m infinigen.tools.export \
 ---
 
 ## 🎥 Rendering & Videos
+
 
 Use FFmpeg to convert frames:
 
