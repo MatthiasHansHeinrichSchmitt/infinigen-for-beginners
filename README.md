@@ -167,11 +167,6 @@ See `configs/scene_types/under_water.gin` and `kelp_forest.gin` for full setups.
 
 ---
 
-## ⚙️ Key Gin Parameters
-
-
----
-
 ## 🧱 Troubleshooting & Insights
 
 When playing around with all the possible parameters and configurations, you will run into different issues. To give you a hand full of fixes for the beginning, we provide you with a short list of things that came us across.
