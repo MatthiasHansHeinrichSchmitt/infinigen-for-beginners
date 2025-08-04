@@ -169,6 +169,7 @@ See `configs/scene_types/under_water.gin` and `kelp_forest.gin` for full setups.
 
 ## ⚙️ Key Gin Parameters
 
+
 ---
 
 ## 🧱 Troubleshooting & Insights
@@ -223,7 +224,7 @@ bpy.data.objects.remove(obj, do_unlink=True)
 
 - Exporting low-asset scenes reduces file size significantly. (assets carry a lot of data, e.g. texture and complex structure)
   
-	We modified the `simple.gin`and limited the terrain bounds in order to generate fewer assets. 
+	We modified the `simple.gin` and limited the terrain bounds in order to generate fewer assets.
 
 ```gin
 include 'infinigen_examples/configs_nature/performance/dev.gin'
@@ -234,10 +235,30 @@ run_erosion.n_iters = [1, 1]
 
 configure_render_cycles.num_samples = 100
 
-Terrain.bounds = (-1, 1, -1, 1, -1, 1)
-Terrain.populated_bounds = (-1, 1, -1, 1, -1, 1)
+Terrain.bounds = (-5, 5, -5, 5, -5, 5)
+Terrain.populated_bounds = (-5, 5, -5, 5, -5, 5)
 
 ```
+
+
+
+<table style="width:100%; table-layout:fixed;">
+  <tr>
+    <td style="width:50%; text-align:center;">
+      <figure>
+        <img src="bounds_15_populated_10.png" alt="Image 1" style="width:100%; height:auto;"/>
+        <figcaption>Figure 1: bounds = 15, populated_bounds = 10</figcaption>
+      </figure>
+    </td>
+    <td style="width:50%; text-align:center;">
+      <figure>
+        <img src="bounds_10_populated_5.png" alt="Image 2" style="width:100%; height:auto;"/>
+        <figcaption>Figure 2: bounds = 10, populated_bounds = 5</figcaption>
+      </figure>
+    </td>
+  </tr>
+</table>
+
 
 You have to add this `.gin`file when calling the scene generation, e.g.
 
@@ -246,17 +267,32 @@ python -m infinigen.datagen.manage_jobs \
 --output_folder outputs/under_water_even_smaller \  
 --num_scenes 1 \
 --specific_seed 0 \
---configs coral_reef.gin <name_of_config_file_below>.gin \
+--configs coral_reef.gin <name_of_config_file_above>.gin \
 --pipeline_configs local_16GB.gin static.gin \
 --pipeline_overrides LocalScheduleHandler.use_gpu=False
  ```
- 
+
+❗️Caution:
+
+When reducing the bounds of the scene too much, you mess up with the constraints and have to modify them so that they stay within the bounds of the scene.
+
+```gin
+multi_mountains_params.height = ("uniform", 0.3, )
+multi_mountains_params.min_freq = ("uniform", 0.01, 0.015)
+multi_mountains_params.max_freq = ("uniform", 0.03, 0.06)
+
+keep_cam_pose_proposal.terrain_coverage_range = (0.3, 1)
+camera.camera_pose_proposal.altitude = ("clip_gaussian", 0.3, 0.7, 2, 1)
+camera.camera_pose_proposal.pitch = ("clip_gaussian", 90, 15, 60, 110)
+```
 
 ---
 
 ## 🧭 Simulator Integration
+- Sanity-check in CloudCompare if the scenes are properly exported 
 
-- Tested with **Stonefish** and **Bluerov2 Gym (Meshcat)**
+![[Cloud_Compare_scene_example.png]]
+- Tested with **Stonefish** and **Bluerov2 Gym (Meshcat)**, only very small/low-asset scenes (<1GB file size)
 - Exported `.obj` or `.dae` files are loaded, but complex scenes (high asset density) may break visualization
 
 ---
