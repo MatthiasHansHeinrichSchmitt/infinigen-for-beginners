@@ -1,9 +1,7 @@
-# Infinigen for Beginners
-This repo aims to convey an understanding of the infinigen code base structure and the scene generation. Moreover, we will focus on the scene generation on a local device, so to say with computational limitations, and we especially aim to generate underwater scenes.
 
 # 🌊 Generating Underwater 3D Scenes with Infinigen
 
-This project documents the process and learnings from generating high-quality underwater 3D scenes using [Infinigen](https://github.com/princeton-vl/infinigen) and integrating them into simulation environments.
+This project's summary aims to provide an understanding of how to generate high-quality underwater 3D scenes with [Infinigen](https://github.com/princeton-vl/infinigen) and integrate them into simulation environments. Moreover, we focus on scene generation on a local device,  i.e. with limited computing capacity.
 
 ---
 
@@ -89,7 +87,7 @@ Note, if you have a local GPU, set `LocalScheduleHandler.use_gpu=True`.
 
 ---
 
-## ⚙️ Key Gin Parameters
+## ⚙️  Gin Configuration Insights
 
 If you have never worked with Gin file configuration before, you should know that it is really powerful. It simply allows you to modify any parameters in all scripts that you are calling. How does it work?
 
@@ -169,6 +167,10 @@ See `configs/scene_types/under_water.gin` and `kelp_forest.gin` for full setups.
 
 ---
 
+## ⚙️ Key Gin Parameters
+
+---
+
 ## 🧱 Troubleshooting & Insights
 
 When playing around with all the possible parameters and configurations, you will run into different issues. To give you a hand full of fixes for the beginning, we provide you with a short list of things that came us across.
@@ -186,6 +188,7 @@ When playing around with all the possible parameters and configurations, you wil
 
 ## 📦 Exporting to External Simulators
 
+After a scene generation by above mentioned code, you will end up with `.blend` files and ground truth data. However, you may be interested in loading your scene in a simulator and most likely you will have to convert your file format. We chose for the `.obj` format, because it is widely used and allows a great 
 
 Export `.blend` to `.obj`:
 
@@ -196,9 +199,58 @@ python -m infinigen.tools.export \
   -f obj -r 256
 ```
 
+`-r` allows you to modify the resolution of the linked texture maps (in our example: 256x256).
+For more details and export options take a look into the original documentation: 
+https://github.com/princeton-vl/infinigen/blob/main/docs/ExportingToExternalFileFormats.md
+
 **Tips**:
-- Remove atmospheric objects from `.blend` before export. (blocks the detailed structure of the scene to be perceived in a similator)
+- Remove atmospheric objects from `.blend` before export. (blocks the detailed structure of the scene to be perceived in a similator) 
+
+	We inserted this snippet at the end of the `infinigen.infinigen.tools.export.delete_objects()` function, in order to remove any disturbing assets: 
+```python
+# Remove any object with atmosphere/emitter in name
+
+for obj in list(bpy.data.objects):
+
+name = obj.name.lower()
+
+if "atmosphere" in name or "emitter" in name or "cloud" in name or "liquid" in name:
+
+print(f"Removing object: {obj.name}")
+
+bpy.data.objects.remove(obj, do_unlink=True)
+```
+
 - Exporting low-asset scenes reduces file size significantly. (assets carry a lot of data, e.g. texture and complex structure)
+  
+	We modified the `simple.gin`and limited the terrain bounds in order to generate fewer assets. 
+
+```gin
+include 'infinigen_examples/configs_nature/performance/dev.gin'
+include 'infinigen_examples/configs_nature/disable_assets/no_creatures.gin'
+include 'infinigen_examples/configs_nature/performance/fast_terrain_assets.gin'
+
+run_erosion.n_iters = [1, 1]  
+
+configure_render_cycles.num_samples = 100
+
+Terrain.bounds = (-1, 1, -1, 1, -1, 1)
+Terrain.populated_bounds = (-1, 1, -1, 1, -1, 1)
+
+```
+
+You have to add this `.gin`file when calling the scene generation, e.g.
+
+```batch
+python -m infinigen.datagen.manage_jobs \  
+--output_folder outputs/under_water_even_smaller \  
+--num_scenes 1 \
+--specific_seed 0 \
+--configs coral_reef.gin <name_of_config_file_below>.gin \
+--pipeline_configs local_16GB.gin static.gin \
+--pipeline_overrides LocalScheduleHandler.use_gpu=False
+ ```
+ 
 
 ---
 
@@ -238,6 +290,8 @@ iterate_scene_tasks.render_frame_range = [1, 1]
 ```
 
 This reduced rendering time from 15 min → 2 min.
+
+Note that in this case you are more/only interested in generating a scene (`.blend`) than in generating consecutive frames sampled from the cameras.
 
 ---
 
